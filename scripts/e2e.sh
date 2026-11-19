@@ -68,10 +68,14 @@ EOF
 cat >"$tmp/lib/agent-loop" <<'EOF'
 printf '\033[1;35mfake %s\033[0m in %s\n' "$FAKE_NAME" "$PWD"
 [ -n "${FAKE_STATUS:-}" ] && printf '\033]7501;state=%s\033\\' "$FAKE_STATUS"
+if [ -n "${FAKE_SCREEN:-}" ]; then
+    for i in {1..23}; do printf '\n'; done
+    printf '%s\n' "$FAKE_SCREEN"
+fi
 trap exit TERM HUP
 while :; do sleep 1000 & wait; done
 EOF
-for a in claude codex opencode pi amp; do
+for a in claude codex opencode pi omp amp; do
     cat >"$tmp/bin/$a" <<EOF
 #!/usr/bin/env bash
 FAKE_NAME=$a exec -a $a bash $tmp/lib/agent-loop
@@ -179,6 +183,8 @@ tm new-session -d -s beta -c "$tmp/proj/plain" -x 120 -y 30
 tm send-keys -t beta: gemini Enter
 tm new-session -d -s spare -c "$tmp/proj/plain"
 tm new-session -d -s victim -c "$tmp/proj/plain"
+tm new-session -d -s omptest -c "$tmp/proj/plain" -x 120 -y 30 \
+    "FAKE_SCREEN='│ Enter select · Esc cancel │' omp"
 amp_pane=$(tm display -p -t alpha:agent '#{pane_id}')
 gemini_pane=$(tm display -p -t beta: '#{pane_id}')
 # The dashboard opens in a modal floating pane, with and without --client.
@@ -283,6 +289,13 @@ open_outside out
 w=e2e:out
 wait_for $w "✦ gemini" && echo "ok: an agent that runs in node is found by its argument"
 wait_for $w "↯ amp" >/dev/null
+wait_for $w "⊕ omp" && echo "ok: omp is found by its command"
+filter $w omp
+wait_for $w "× blocked" && echo "ok: omp's visible pane reports a blocked status"
+t send-keys -t $w Escape
+wait_for $w "↯ amp" >/dev/null
+tm kill-session -t omptest
+wait_gone $w "⊕ omp" >/dev/null
 rows=""
 for m in zellij tmux herdr; do
     have $m && rows+="$(row_of $w "│ $m ─") "
@@ -500,12 +513,27 @@ eventually "the client switched to beta" beta tm display -p -c "$client" '#{sess
 check "the other client stayed" "$(tm list-clients -F '#{session_name}' | sort | tr '\n' ' ')" "beta spare "
 wait_gone e2e:tin "in tmux" && echo "ok: the popup closed"
 
-step "tpm plugin: prefix+b opens the sidebar, and an empty option binds no key"
+step "tpm plugin: prefix+b toggles the sidebar, and an empty option binds no key"
+# Give the popup time to release the client's keys.
+sleep 0.5
+source_pane=$(tm display-message -t beta:tin -p '#{pane_id}')
 t send-keys -t e2e:tin C-b b
 wait_for e2e:tin "─ Sessions ─" && echo "ok: the sidebar opened"
 check "focus events are on" "$(tm show -gv focus-events)" on
-t send-keys -t e2e:tin q
-eventually "the sidebar closed" 1 sh -c "tmux list-panes -t beta: | wc -l | tr -d ' '"
+eventually "the sidebar added one pane" 2 sh -c "tmux list-panes -t beta: | wc -l | tr -d ' '"
+t send-keys -t e2e:tin C-b b
+eventually "the key closes its own sidebar" 1 sh -c "tmux list-panes -t beta: | wc -l | tr -d ' '"
+t send-keys -t e2e:tin C-b b
+eventually "the key opens the sidebar again" 2 sh -c "tmux list-panes -t beta: | wc -l | tr -d ' '"
+tm select-pane -t "$source_pane"
+t send-keys -t e2e:tin C-b b
+eventually "the key closes the sidebar from another pane" 1 sh -c "tmux list-panes -t beta: | wc -l | tr -d ' '"
+tm set -g @multiplexer-sidebar-compact-key c
+"$root/multiplexer-sidebar.tmux"
+t send-keys -t e2e:tin C-b c
+eventually "the compact key opens a pane" 2 sh -c "tmux list-panes -t beta: | wc -l | tr -d ' '"
+t send-keys -t e2e:tin C-b c
+eventually "the compact key closes its pane" 1 sh -c "tmux list-panes -t beta: | wc -l | tr -d ' '"
 tm unbind-key Tab
 tm set -g @multiplexer-sidebar-key ''
 "$root/multiplexer-sidebar.tmux"

@@ -82,6 +82,8 @@ class AgentDetectionTest(unittest.TestCase):
         self.assertEqual(md.detect_agent(["/usr/bin/codex", "--yolo"], NAMES), "codex")
         self.assertEqual(md.detect_agent(["cursor-agent"], NAMES), "cursor-agent")
         self.assertEqual(md.detect_agent(["agy"], NAMES), "agy")
+        self.assertEqual(md.detect_agent(["omp"], NAMES), "omp")
+        self.assertEqual(md.detect_agent(["/home/me/.local/bin/omp"], NAMES), "omp")
         self.assertIsNone(md.detect_agent(["bash"], NAMES))
         self.assertIsNone(md.detect_agent([], NAMES))
 
@@ -93,6 +95,7 @@ class AgentDetectionTest(unittest.TestCase):
         )
         self.assertEqual(md.detect_agent(["python3.12", "-m", "aider"], NAMES), "aider")
         self.assertEqual(md.detect_agent(["bun", "/x/bin/opencode"], NAMES), "opencode")
+        self.assertEqual(md.detect_agent(["bun", "/x/bin/omp"], NAMES), "omp")
         # Only the first argument that is not an option counts.
         self.assertIsNone(md.detect_agent(["node", "server.js", "claude"], NAMES))
         # A program that is not an interpreter is not looked into.
@@ -121,6 +124,19 @@ class AgentDetectionTest(unittest.TestCase):
         self.assertEqual(md.detect_agent(["node", "/x/myagent"], names), "myagent")
         self.assertEqual(md.detect_agent(["claude"], names), "claude")
         self.assertIsNone(md.detect_agent(["kimi"], NAMES))
+
+    def test_omp_screen_status(self):
+        self.assertEqual(md.omp_screen_status("⠏ Checking… ⟦esc⟧"), "working")
+        self.assertEqual(md.omp_screen_status("Running… (esc to cancel)"), "working")
+        self.assertEqual(
+            md.omp_screen_status(
+                "\x1b[35m⠏ Checking… ⟦esc⟧\x1b[0m\n"
+                "│ Enter select · n note · ↑/↓ move · Esc cancel │"
+            ),
+            "blocked",
+        )
+        self.assertEqual(md.omp_screen_status("Ready for input"), "idle")
+        self.assertEqual(md.omp_screen_status("⟦esc⟧\n" + "old line\n" * 20), "idle")
 
     def test_deepest_agent_below_a_pane(self):
         tree = md.ProcessTree(fixture("tmux/ps.txt"))
@@ -247,6 +263,21 @@ class TmuxTest(unittest.TestCase):
         group = md.Tmux(runner, {}).load(inside=False)
         self.assertEqual([a.name for a in group.agents], ["claude"])
         self.assertNotIn(["ps", "-A", "-o", "pid=,ppid=,args="], runner.calls)
+
+    def test_omp_status_uses_its_visible_pane(self):
+        panes = "$0\t@0\t0\tzsh\t1\t1\t0\t%0\tomp\t100\t/home/me\n"
+        runner = FakeRunner(
+            {
+                ("tmux", "list-sessions"): "~\t$0\t1\t1\t0\t/home/me\n",
+                ("tmux", "list-panes"): panes,
+                ("tmux", "capture-pane"): "⠏ Checking… ⟦esc⟧\n",
+            }
+        )
+        group = md.Tmux(runner, {}).load(inside=False)
+        self.assertEqual(
+            [(a.name, a.status) for a in group.agents], [("omp", "working")]
+        )
+        self.assertIn(["tmux", "capture-pane", "-e", "-p", "-t", "%0"], runner.calls)
 
 
 # ---------------------------------------------------------------- zellij

@@ -47,8 +47,8 @@ if [ -n "$sidebar_key" ] || [ -n "$compact_key" ]; then
     tmux set-option -g focus-events on
 fi
 if [ -n "$sidebar_key" ]; then
-    tmux bind-key "$sidebar_key" split-window -hbf -l 32 "$script --sidebar"
+    tmux bind-key "$sidebar_key" run-shell "$script --tmux-toggle-sidebar '#{pane_id}' '#{socket_path}'"
 fi
 if [ -n "$compact_key" ]; then
-    tmux bind-key "$compact_key" split-window -hbf -l 3 "$script --compact"
+    tmux bind-key "$compact_key" run-shell "$script --tmux-toggle-sidebar '#{pane_id}' '#{socket_path}' --compact"
 fi

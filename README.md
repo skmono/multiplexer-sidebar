@@ -3,7 +3,7 @@
 A herdr-style sidebar and a fullscreen dashboard for
 [tmux](https://github.com/tmux/tmux) and [zellij](https://zellij.dev), and
 for [herdr](https://herdr.dev) itself. Both show every session and every
-coding agent (claude, codex, opencode, pi, gemini and others) in one place.
+coding agent (claude, codex, opencode, pi, omp, gemini and others) in one place.
 Press Enter to jump there.
 
 - Keep the sidebar open in a narrow pane beside your work, as in herdr, to
@@ -201,7 +201,7 @@ The plugin binds these keys, so you can skip the tmux steps below:
 
 - `prefix` + `Tab` opens the dashboard in a floating pane, or in a popup
   before tmux 3.8.
-- `prefix` + `b` opens the sidebar on the left of the current window.
+- `prefix` + `b` opens or closes the sidebar on the left of the current window.
 
 To pick other keys, set these options before the `@plugin` line. An empty
 value binds no key.
@@ -264,8 +264,10 @@ tmux (`~/.tmux.conf`), to open a sidebar on the left of the current window:
 
 ```tmux
 set -g focus-events on
-bind b split-window -hbf -l 32 multiplexer-sidebar --sidebar
+bind b run-shell "multiplexer-sidebar --tmux-toggle-sidebar '#{pane_id}' '#{socket_path}'"
 ```
+
+Press `prefix+b` to open or close the sidebar in the current window.
 
 zellij (`~/.config/zellij/layouts/default.kdl`), to give every tab a
 sidebar, including the tabs and sessions you open later:
@@ -304,7 +306,7 @@ tmux (`~/.tmux.conf`):
 
 ```tmux
 set -g focus-events on
-bind b split-window -hbf -l 3 multiplexer-sidebar --compact
+bind b run-shell "multiplexer-sidebar --tmux-toggle-sidebar '#{pane_id}' '#{socket_path}' --compact"
 ```
 
 zellij (`~/.config/zellij/layouts/compact-sidebar.kdl`), as a layout of its
@@ -392,7 +394,8 @@ Inside a multiplexer the dashboard lists only that multiplexer, or each one
 it runs in when they are nested. herdr workspaces appear as sessions, and
 herdr agents show herdr's own status: working, idle, blocked or done. With
 zellij 0.46 or later, an agent that reports its status to zellij shows it
-too, and can also show error.
+too, and can also show error. In tmux, omp shows whether it is working,
+waiting for input or idle.
 
 A new session with an empty name is named after the git repository or the
 directory it starts in. If a session with that name exists, the dashboard

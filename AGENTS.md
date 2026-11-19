@@ -90,3 +90,11 @@ and the outcome to preserve, not a step-by-step patch.
   as `/nix/store`. `scripts/e2e.sh` starts with fresh state on every run,
   so a zellij from a path like `~/.local/bin` covers the tab with that
   screen, and the zellij tab checks fail. Run the e2e tests in the devShell.
+- **omp status in tmux comes from its visible pane.** Its working and
+  blocked text is part of omp's screen, and can change with omp's interface
+  or terminal width. Keep the status check limited to the current pane
+  screen and verify it against working, blocked and idle screens when omp
+  changes its footer.
+- **A tmux sidebar key applies to one window and one server.** Pass the
+  source pane and socket from the key binding. A pane option identifies the
+  sidebar until that pane closes, including when focus moves elsewhere.

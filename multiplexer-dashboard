@@ -34,15 +34,16 @@ whole server. The dashboard lists the workspaces of the default herdr server
 as sessions, as multiplexer-new-session does.
 
 An agent is a pane whose foreground program is one of claude, codex,
-opencode, pi, gemini, agy (Antigravity), aider, amp, crush, goose,
+opencode, pi, omp, gemini, agy (Antigravity), aider, amp, crush, goose,
 cursor-agent, qwen, droid and copilot, or of the comma-separated names in
 MULTIPLEXER_DASHBOARD_AGENTS.
 When the foreground program is an interpreter (node, bun, deno or python),
 the name comes from the first argument that is not an option, such as
 ".../bin/gemini". Herdr reports its own agents and their status. Zellij
 0.46 and later report the status that an agent sends with the OSC 7501
-escape sequence. Each
-detected agent has its own icon, and every other agent has the icon "◇".
+escape sequence. In tmux, omp's visible pane also shows whether it is
+working, blocked or idle. Each detected agent has its own icon, and every
+other agent has the icon "◇".
 
 New sessions are named as multiplexer-new-session names them: "~" for the
 home directory, the name of the repository's root directory inside a git
@@ -89,6 +90,7 @@ import os
 import queue
 import re
 import select
+import shlex
 import shutil
 import signal
 import subprocess
@@ -423,6 +425,7 @@ class Theme:
             "codex": self.foam,
             "opencode": self.iris,
             "pi": self.rose,
+            "omp": self.rose,
         }
         return colors.get(name, self.pine)
 
@@ -706,6 +709,54 @@ def run_command(args: Sequence[str], timeout: float = 5.0) -> Result:
     )
 
 
+def toggle_tmux_sidebar(source_pane: str, socket_path: str, compact: bool) -> int:
+    """Closes a sidebar in the pane's window, or opens one if none exists."""
+    if not re.fullmatch(r"%[0-9]+", source_pane):
+        print("invalid tmux pane", file=sys.stderr)
+        return 1
+    tmux = ["tmux", "-S", socket_path]
+    panes = run_command(
+        tmux
+        + ["list-panes", "-t", source_pane, "-F", "#{pane_id} #{@multiplexer_sidebar}"]
+    )
+    if panes.code:
+        print(panes.err.strip(), file=sys.stderr)
+        return panes.code
+    for line in panes.out.splitlines():
+        pane_id, _, marker = line.partition(" ")
+        if marker == "1":
+            closed = run_command(tmux + ["kill-pane", "-t", pane_id])
+            if closed.code:
+                print(closed.err.strip(), file=sys.stderr)
+            return closed.code
+    command = shlex.quote(SCRIPT) + (" --compact" if compact else " --sidebar")
+    opened = run_command(
+        tmux
+        + [
+            "split-window",
+            "-hbf",
+            "-l",
+            "3" if compact else "32",
+            "-t",
+            source_pane,
+            "-P",
+            "-F",
+            "#{pane_id}",
+            command,
+        ]
+    )
+    if opened.code:
+        print(opened.err.strip(), file=sys.stderr)
+        return opened.code
+    pane_id = opened.out.strip()
+    marked = run_command(
+        tmux + ["set-option", "-p", "-t", pane_id, "@multiplexer_sidebar", "1"]
+    )
+    if marked.code:
+        print(marked.err.strip(), file=sys.stderr)
+    return marked.code
+
+
 def herdr_error(text: str) -> tuple[str, str] | None:
     """The code and message of a herdr error, which herdr prints as JSON."""
     try:
@@ -855,6 +906,7 @@ AGENT_ICONS = {
     "codex": "◎",
     "opencode": "▣",
     "pi": "π",
+    "omp": "⊕",
     "gemini": "✦",
     # The Antigravity CLI.
     "agy": "⋂",
@@ -913,6 +965,29 @@ def agent_names(env: Mapping[str, str]) -> frozenset[str]:
     return frozenset(DEFAULT_AGENTS) | {
         n.strip() for n in extra.split(",") if n.strip()
     }
+
+
+def omp_screen_status(screen: str) -> str:
+    """Read omp's current status from the bottom of its visible pane."""
+    lines = CAPTURE_SEQ_RE.sub("", screen).splitlines()
+    tail = "\n".join(lines[-20:])
+    if re.search(r"Enter select.*Esc cancel", tail):
+        return "blocked"
+    if "⟦esc⟧" in tail or "(esc to cancel)" in tail:
+        return "working"
+    return "idle"
+
+
+def read_tmux_omp_status(
+    agents: Sequence[Agent], capture: Callable[[Agent], Result]
+) -> None:
+    """Read the visible screens of omp agents in tmux."""
+    missing = [a for a in agents if a.name == "omp" and a.status is None]
+    for agent, result in zip(
+        missing, run_parallel([lambda a=a: capture(a) for a in missing])
+    ):
+        if result.code == 0:
+            agent.status = omp_screen_status(result.out)
 
 
 def is_interpreter(program: str) -> bool:
@@ -1169,7 +1244,9 @@ class Tmux:
             procs = ProcessTree(ps.out) if ps.code == 0 else None
         current = self.current_session() if inside else None
         own = self.env.get("TMUX_PANE", "") if inside else ""
-        return tmux_snapshot(sessions, panes, procs, self.names, current, own)
+        group = tmux_snapshot(sessions, panes, procs, self.names, current, own)
+        read_tmux_omp_status(group.agents, lambda a: self.capture(a.pane, None))
+        return group
 
     def current_session(self) -> str | None:
         # display-message -c still formats the calling pane's session.
@@ -3479,6 +3556,12 @@ def parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
         default="collapsed",
         help="start with each session's tabs hidden or shown",
     )
+    p.add_argument(
+        "--tmux-toggle-sidebar",
+        nargs=2,
+        metavar=("PANE", "SOCKET"),
+        help="toggle the sidebar in the tmux window containing PANE",
+    )
     # Internal: see zellij_focus_pane.
     p.add_argument("--zellij-focus-pane", nargs=3, help=argparse.SUPPRESS)
     args = p.parse_args(argv)
@@ -3510,6 +3593,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     prog = os.path.basename(sys.argv[0])
     if args.zellij_focus_pane:
         return zellij_focus_pane(*args.zellij_focus_pane)
+    if args.tmux_toggle_sidebar:
+        return toggle_tmux_sidebar(
+            args.tmux_toggle_sidebar[0], args.tmux_toggle_sidebar[1], args.compact
+        )
     ctx = detect_context(os.environ, shutil.which, args.multiplexer)
     if not ctx.listed:
         print(
