@@ -469,6 +469,47 @@ t send-keys -t e2e:tin -l beta
 t send-keys -t e2e:tin Enter
 eventually "an existing name switches to it" beta tm display -p -c "$client" '#{session_name}'
 check "no duplicate session" "$(tm list-sessions -F '#{session_name}' | grep -c '^beta')" 1
+
+step "tpm plugin: prefix+Tab opens the dashboard in a floating pane"
+"$root/multiplexer-sidebar.tmux"
+t send-keys -t e2e:tin C-b Tab
+wait_for e2e:tin "in tmux" >/dev/null
+check "the dashboard is in a floating pane" \
+    "$(tm list-panes -a -F '#{pane_floating_flag}' | grep -c 1)" 1
+filter e2e:tin alpha
+t send-keys -t e2e:tin Enter
+eventually "the client switched to alpha" alpha tm display -p -c "$client" '#{session_name}'
+
+step "tpm plugin: before tmux 3.8, prefix+Tab opens a popup"
+# A tmux without the new-pane command, as before 3.8.
+mkdir -p "$tmp/oldtmux"
+cat >"$tmp/oldtmux/tmux" <<EOF
+#!/bin/sh
+[ "\$1 \$2" = "list-commands new-pane" ] && exit 1
+exec $(command -v tmux) "\$@"
+EOF
+chmod +x "$tmp/oldtmux/tmux"
+PATH="$tmp/oldtmux:$PATH" "$root/multiplexer-sidebar.tmux"
+t send-keys -t e2e:tin C-b Tab
+wait_for e2e:tin "in tmux" >/dev/null
+check "the dashboard is not in a pane" \
+    "$(tm list-panes -a -F '#{pane_floating_flag}' | grep -c 1)" 0
+filter e2e:tin beta
+t send-keys -t e2e:tin Enter
+eventually "the client switched to beta" beta tm display -p -c "$client" '#{session_name}'
+check "the other client stayed" "$(tm list-clients -F '#{session_name}' | sort | tr '\n' ' ')" "beta spare "
+wait_gone e2e:tin "in tmux" && echo "ok: the popup closed"
+
+step "tpm plugin: prefix+b opens the sidebar, and an empty option binds no key"
+t send-keys -t e2e:tin C-b b
+wait_for e2e:tin "─ Sessions ─" && echo "ok: the sidebar opened"
+check "focus events are on" "$(tm show -gv focus-events)" on
+t send-keys -t e2e:tin q
+eventually "the sidebar closed" 1 sh -c "tmux list-panes -t beta: | wc -l | tr -d ' '"
+tm unbind-key Tab
+tm set -g @multiplexer-sidebar-key ''
+"$root/multiplexer-sidebar.tmux"
+check "Tab is not bound" "$(tm list-keys -T prefix Tab 2>/dev/null | wc -l | tr -d ' ')" 0
 t kill-window -t e2e:tin
 t kill-window -t e2e:tother
 

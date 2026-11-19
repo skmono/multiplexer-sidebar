@@ -187,6 +187,34 @@ has a file under each name, and the two files are identical. Key bindings
 that run `multiplexer-dashboard` keep working if you download that file
 instead.
 
+### With tpm
+
+For tmux alone, you can install it with the
+[tmux plugin manager](https://github.com/tmux-plugins/tpm) instead. Add
+this line to `~/.tmux.conf` and press `prefix` + `I`:
+
+```tmux
+set -g @plugin 'skmono/multiplexer-sidebar'
+```
+
+The plugin binds these keys, so you can skip the tmux steps below:
+
+- `prefix` + `Tab` opens the dashboard in a floating pane, or in a popup
+  before tmux 3.8.
+- `prefix` + `b` opens the sidebar on the left of the current window.
+
+To pick other keys, set these options before the `@plugin` line. An empty
+value binds no key.
+
+```tmux
+set -g @multiplexer-sidebar-key 'Tab'          # the dashboard
+set -g @multiplexer-sidebar-sidebar-key 'b'    # the sidebar
+set -g @multiplexer-sidebar-compact-key ''     # the compact sidebar, unbound
+```
+
+The plugin does not put `multiplexer-sidebar` on your `PATH`. To run it
+from a shell or from zellij, install the file as shown above.
+
 ## Set up a key binding
 
 Bind a key to open the dashboard in a floating pane. Give the pane enough

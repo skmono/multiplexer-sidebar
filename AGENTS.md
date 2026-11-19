@@ -24,6 +24,10 @@ drop into a `bin` directory. Keep it that way:
 - Standard library only, Python 3.9 or later, and no `curses`.
 - Ask each multiplexer for its state through its own CLI, and use its own
   commands for actions. Store nothing on disk; there is no config file.
+- `multiplexer-sidebar.tmux` lets tpm install the repository as a tmux
+  plugin. It is a POSIX shell script that only binds keys to the script in
+  its own directory, so the dashboard itself stays one file. Its key
+  options are tmux options, not a config file.
 - `prototype/` holds mock prototypes. They are not part of the product and
   are not checked.
 
