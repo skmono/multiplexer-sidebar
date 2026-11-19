@@ -14,6 +14,9 @@ dir=$(cd "$(dirname "$0")" && pwd)
 # Single quotes keep a directory with spaces in one word when tmux passes
 # the command to the shell.
 script="'$dir/multiplexer-dashboard'"
+python=$(command -v python3)
+tmux_bin=$(command -v tmux)
+toggle_script="'$python' $script"
 
 # Prints the value of a tmux option, or $2 when the option is not set.
 option() {
@@ -47,8 +50,8 @@ if [ -n "$sidebar_key" ] || [ -n "$compact_key" ]; then
     tmux set-option -g focus-events on
 fi
 if [ -n "$sidebar_key" ]; then
-    tmux bind-key "$sidebar_key" run-shell "$script --tmux-toggle-sidebar '#{pane_id}' '#{socket_path}'"
+    tmux bind-key "$sidebar_key" run-shell "$toggle_script --tmux-toggle-sidebar '#{pane_id}' '#{socket_path}' --tmux-bin '$tmux_bin'"
 fi
 if [ -n "$compact_key" ]; then
-    tmux bind-key "$compact_key" run-shell "$script --tmux-toggle-sidebar '#{pane_id}' '#{socket_path}' --compact"
+    tmux bind-key "$compact_key" run-shell "$toggle_script --tmux-toggle-sidebar '#{pane_id}' '#{socket_path}' --tmux-bin '$tmux_bin' --compact"
 fi

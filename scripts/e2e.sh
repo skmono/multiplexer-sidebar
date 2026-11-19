@@ -517,23 +517,39 @@ step "tpm plugin: prefix+b toggles the sidebar, and an empty option binds no key
 # Give the popup time to release the client's keys.
 sleep 0.5
 source_pane=$(tm display-message -t beta:tin -p '#{pane_id}')
+extra_pane=$(tm split-window -h -d -t "$source_pane" -P -F '#{pane_id}' "sleep 600")
+alpha_sidebar=$(tm split-window -hbf -l 32 -d -t alpha: -P -F '#{pane_id}' "$dash --sidebar")
+spare_sidebar=$(tm split-window -hbf -l 32 -d -t spare: -P -F '#{pane_id}' "$dash --sidebar")
+tm set-option -p -t "$alpha_sidebar" @multiplexer_sidebar 1
+tm set-option -p -t "$spare_sidebar" @multiplexer_sidebar 1
 t send-keys -t e2e:tin C-b b
 wait_for e2e:tin "─ Sessions ─" && echo "ok: the sidebar opened"
 check "focus events are on" "$(tm show -gv focus-events)" on
-eventually "the sidebar added one pane" 2 sh -c "tmux list-panes -t beta: | wc -l | tr -d ' '"
+eventually "the sidebar added one pane" 3 sh -c "tmux list-panes -t beta: | wc -l | tr -d ' '"
+tm set-environment -t beta PATH "$tmp/no-tools"
 t send-keys -t e2e:tin C-b b
-eventually "the key closes its own sidebar" 1 sh -c "tmux list-panes -t beta: | wc -l | tr -d ' '"
+eventually "the key closes its own sidebar" 2 sh -c "tmux list-panes -t beta: | wc -l | tr -d ' '"
+check "the key leaves no tmux command error" \
+    "$(tm show-messages | grep -Ec 'returned [1-9][0-9]*')" 0
+check "the sidebar in alpha stays open" \
+    "$(tm list-panes -t alpha: -F '#{pane_id}' | grep -c -F "$alpha_sidebar")" 1
+check "the sidebar in spare stays open" \
+    "$(tm list-panes -t spare: -F '#{pane_id}' | grep -c -F "$spare_sidebar")" 1
+tm set-environment -t beta PATH "$PATH"
 t send-keys -t e2e:tin C-b b
-eventually "the key opens the sidebar again" 2 sh -c "tmux list-panes -t beta: | wc -l | tr -d ' '"
+eventually "the key opens the sidebar again" 3 sh -c "tmux list-panes -t beta: | wc -l | tr -d ' '"
 tm select-pane -t "$source_pane"
 t send-keys -t e2e:tin C-b b
-eventually "the key closes the sidebar from another pane" 1 sh -c "tmux list-panes -t beta: | wc -l | tr -d ' '"
+eventually "the key closes the sidebar from another pane" 2 sh -c "tmux list-panes -t beta: | wc -l | tr -d ' '"
 tm set -g @multiplexer-sidebar-compact-key c
 "$root/multiplexer-sidebar.tmux"
 t send-keys -t e2e:tin C-b c
-eventually "the compact key opens a pane" 2 sh -c "tmux list-panes -t beta: | wc -l | tr -d ' '"
+eventually "the compact key opens a pane" 3 sh -c "tmux list-panes -t beta: | wc -l | tr -d ' '"
 t send-keys -t e2e:tin C-b c
-eventually "the compact key closes its pane" 1 sh -c "tmux list-panes -t beta: | wc -l | tr -d ' '"
+eventually "the compact key closes its pane" 2 sh -c "tmux list-panes -t beta: | wc -l | tr -d ' '"
+tm kill-pane -t "$extra_pane"
+tm kill-pane -t "$alpha_sidebar"
+tm kill-pane -t "$spare_sidebar"
 tm unbind-key Tab
 tm set -g @multiplexer-sidebar-key ''
 "$root/multiplexer-sidebar.tmux"

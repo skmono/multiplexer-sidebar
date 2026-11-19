@@ -709,12 +709,14 @@ def run_command(args: Sequence[str], timeout: float = 5.0) -> Result:
     )
 
 
-def toggle_tmux_sidebar(source_pane: str, socket_path: str, compact: bool) -> int:
+def toggle_tmux_sidebar(
+    source_pane: str, socket_path: str, compact: bool, tmux_bin: str = "tmux"
+) -> int:
     """Closes a sidebar in the pane's window, or opens one if none exists."""
     if not re.fullmatch(r"%[0-9]+", source_pane):
         print("invalid tmux pane", file=sys.stderr)
         return 1
-    tmux = ["tmux", "-S", socket_path]
+    tmux = [tmux_bin, "-S", socket_path]
     panes = run_command(
         tmux
         + ["list-panes", "-t", source_pane, "-F", "#{pane_id} #{@multiplexer_sidebar}"]
@@ -729,7 +731,9 @@ def toggle_tmux_sidebar(source_pane: str, socket_path: str, compact: bool) -> in
             if closed.code:
                 print(closed.err.strip(), file=sys.stderr)
             return closed.code
-    command = shlex.quote(SCRIPT) + (" --compact" if compact else " --sidebar")
+    command = " ".join([shlex.quote(sys.executable), shlex.quote(SCRIPT)]) + (
+        " --compact" if compact else " --sidebar"
+    )
     opened = run_command(
         tmux
         + [
@@ -3562,6 +3566,7 @@ def parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
         metavar=("PANE", "SOCKET"),
         help="toggle the sidebar in the tmux window containing PANE",
     )
+    p.add_argument("--tmux-bin", default="tmux", help=argparse.SUPPRESS)
     # Internal: see zellij_focus_pane.
     p.add_argument("--zellij-focus-pane", nargs=3, help=argparse.SUPPRESS)
     args = p.parse_args(argv)
@@ -3595,7 +3600,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         return zellij_focus_pane(*args.zellij_focus_pane)
     if args.tmux_toggle_sidebar:
         return toggle_tmux_sidebar(
-            args.tmux_toggle_sidebar[0], args.tmux_toggle_sidebar[1], args.compact
+            args.tmux_toggle_sidebar[0],
+            args.tmux_toggle_sidebar[1],
+            args.compact,
+            args.tmux_bin,
         )
     ctx = detect_context(os.environ, shutil.which, args.multiplexer)
     if not ctx.listed:

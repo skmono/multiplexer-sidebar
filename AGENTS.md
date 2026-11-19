@@ -98,3 +98,6 @@ and the outcome to preserve, not a step-by-step patch.
 - **A tmux sidebar key applies to one window and one server.** Pass the
   source pane and socket from the key binding. A pane option identifies the
   sidebar until that pane closes, including when focus moves elsewhere.
+- **A tmux key can run with a different `PATH` from a pane.** Resolve Python
+  and tmux when loading the plugin so the toggle can still run from a pane
+  whose session environment does not list those commands.
