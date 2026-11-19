@@ -14,9 +14,9 @@ dir=$(cd "$(dirname "$0")" && pwd)
 # Single quotes keep a directory with spaces in one word when tmux passes
 # the command to the shell.
 script="'$dir/multiplexer-dashboard'"
-python=$(command -v python3)
-tmux_bin=$(command -v tmux)
-toggle_script="'$python' $script"
+# The pane loop adds spaces for other panes in the window. Remove them so
+# its result is either one sidebar pane ID or an empty string.
+sidebar_pane='#{s/ //g:#{P:#{?#{@multiplexer_sidebar},#{pane_id},}}}'
 
 # Prints the value of a tmux option, or $2 when the option is not set.
 option() {
@@ -49,9 +49,14 @@ fi
 if [ -n "$sidebar_key" ] || [ -n "$compact_key" ]; then
     tmux set-option -g focus-events on
 fi
+# run-shell -C expands the pane ID and runs tmux commands in the server.
 if [ -n "$sidebar_key" ]; then
-    tmux bind-key "$sidebar_key" run-shell "$toggle_script --tmux-toggle-sidebar '#{pane_id}' '#{socket_path}' --tmux-bin '$tmux_bin'"
+    tmux bind-key "$sidebar_key" if-shell -F "$sidebar_pane" \
+        "run-shell -C \"kill-pane -t '$sidebar_pane'\"" \
+        "run-shell -C \"split-window -hbf -l 32 \\\"$script --sidebar\\\" ; set-option -p @multiplexer_sidebar 1\""
 fi
 if [ -n "$compact_key" ]; then
-    tmux bind-key "$compact_key" run-shell "$toggle_script --tmux-toggle-sidebar '#{pane_id}' '#{socket_path}' --tmux-bin '$tmux_bin' --compact"
+    tmux bind-key "$compact_key" if-shell -F "$sidebar_pane" \
+        "run-shell -C \"kill-pane -t '$sidebar_pane'\"" \
+        "run-shell -C \"split-window -hbf -l 3 \\\"$script --compact\\\" ; set-option -p @multiplexer_sidebar 1\""
 fi

@@ -90,7 +90,6 @@ import os
 import queue
 import re
 import select
-import shlex
 import shutil
 import signal
 import subprocess
@@ -707,58 +706,6 @@ def run_command(args: Sequence[str], timeout: float = 5.0) -> Result:
         p.stdout.decode("utf-8", "replace"),
         p.stderr.decode("utf-8", "replace"),
     )
-
-
-def toggle_tmux_sidebar(
-    source_pane: str, socket_path: str, compact: bool, tmux_bin: str = "tmux"
-) -> int:
-    """Closes a sidebar in the pane's window, or opens one if none exists."""
-    if not re.fullmatch(r"%[0-9]+", source_pane):
-        print("invalid tmux pane", file=sys.stderr)
-        return 1
-    tmux = [tmux_bin, "-S", socket_path]
-    panes = run_command(
-        tmux
-        + ["list-panes", "-t", source_pane, "-F", "#{pane_id} #{@multiplexer_sidebar}"]
-    )
-    if panes.code:
-        print(panes.err.strip(), file=sys.stderr)
-        return panes.code
-    for line in panes.out.splitlines():
-        pane_id, _, marker = line.partition(" ")
-        if marker == "1":
-            closed = run_command(tmux + ["kill-pane", "-t", pane_id])
-            if closed.code:
-                print(closed.err.strip(), file=sys.stderr)
-            return closed.code
-    command = " ".join([shlex.quote(sys.executable), shlex.quote(SCRIPT)]) + (
-        " --compact" if compact else " --sidebar"
-    )
-    opened = run_command(
-        tmux
-        + [
-            "split-window",
-            "-hbf",
-            "-l",
-            "3" if compact else "32",
-            "-t",
-            source_pane,
-            "-P",
-            "-F",
-            "#{pane_id}",
-            command,
-        ]
-    )
-    if opened.code:
-        print(opened.err.strip(), file=sys.stderr)
-        return opened.code
-    pane_id = opened.out.strip()
-    marked = run_command(
-        tmux + ["set-option", "-p", "-t", pane_id, "@multiplexer_sidebar", "1"]
-    )
-    if marked.code:
-        print(marked.err.strip(), file=sys.stderr)
-    return marked.code
 
 
 def herdr_error(text: str) -> tuple[str, str] | None:
@@ -3560,13 +3507,6 @@ def parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
         default="collapsed",
         help="start with each session's tabs hidden or shown",
     )
-    p.add_argument(
-        "--tmux-toggle-sidebar",
-        nargs=2,
-        metavar=("PANE", "SOCKET"),
-        help="toggle the sidebar in the tmux window containing PANE",
-    )
-    p.add_argument("--tmux-bin", default="tmux", help=argparse.SUPPRESS)
     # Internal: see zellij_focus_pane.
     p.add_argument("--zellij-focus-pane", nargs=3, help=argparse.SUPPRESS)
     args = p.parse_args(argv)
@@ -3598,13 +3538,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     prog = os.path.basename(sys.argv[0])
     if args.zellij_focus_pane:
         return zellij_focus_pane(*args.zellij_focus_pane)
-    if args.tmux_toggle_sidebar:
-        return toggle_tmux_sidebar(
-            args.tmux_toggle_sidebar[0],
-            args.tmux_toggle_sidebar[1],
-            args.compact,
-            args.tmux_bin,
-        )
     ctx = detect_context(os.environ, shutil.which, args.multiplexer)
     if not ctx.listed:
         print(

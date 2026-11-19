@@ -264,10 +264,10 @@ tmux (`~/.tmux.conf`), to open a sidebar on the left of the current window:
 
 ```tmux
 set -g focus-events on
-bind b run-shell "multiplexer-sidebar --tmux-toggle-sidebar '#{pane_id}' '#{socket_path}'"
+bind b split-window -hbf -l 32 multiplexer-sidebar --sidebar
 ```
 
-Press `prefix+b` to open or close the sidebar in the current window.
+The tpm plugin above also lets `prefix+b` close an open sidebar.
 
 zellij (`~/.config/zellij/layouts/default.kdl`), to give every tab a
 sidebar, including the tabs and sessions you open later:
@@ -306,7 +306,7 @@ tmux (`~/.tmux.conf`):
 
 ```tmux
 set -g focus-events on
-bind b run-shell "multiplexer-sidebar --tmux-toggle-sidebar '#{pane_id}' '#{socket_path}' --compact"
+bind b split-window -hbf -l 3 multiplexer-sidebar --compact
 ```
 
 zellij (`~/.config/zellij/layouts/compact-sidebar.kdl`), as a layout of its
