@@ -516,8 +516,10 @@ wait_gone e2e:tin "in tmux" && echo "ok: the popup closed"
 step "tpm plugin: prefix+b toggles the sidebar, and an empty option binds no key"
 # Give the popup time to release the client's keys.
 sleep 0.5
-source_pane=$(tm display-message -t beta:tin -p '#{pane_id}')
+source_pane=$(tm display-message -t beta:0 -p '#{pane_id}')
 extra_pane=$(tm split-window -h -d -t "$source_pane" -P -F '#{pane_id}' "sleep 600")
+tm resize-pane -t "$source_pane" -x 70
+original_widths=$(tm list-panes -t beta:0 -F '#{pane_id}:#{pane_width}' | sort)
 alpha_sidebar=$(tm split-window -hbf -l 32 -d -t alpha: -P -F '#{pane_id}' "$dash --sidebar")
 spare_sidebar=$(tm split-window -hbf -l 32 -d -t spare: -P -F '#{pane_id}' "$dash --sidebar")
 tm set-option -p -t "$alpha_sidebar" @multiplexer_sidebar 1
@@ -529,6 +531,12 @@ eventually "the sidebar added one pane" 3 sh -c "tmux list-panes -t beta: | wc -
 tm set-environment -t beta PATH "$tmp/no-tools"
 t send-keys -t e2e:tin C-b b
 eventually "the key closes its own sidebar" 2 sh -c "tmux list-panes -t beta: | wc -l | tr -d ' '"
+check "the key restores pane widths" \
+    "$(tm list-panes -t beta:0 -F '#{pane_id}:#{pane_width}' | sort)" "$original_widths"
+check "the saved layout is cleared" \
+    "$(tm show-option -wqv -t beta:0 @multiplexer_sidebar_layout)" ""
+check "the return pane is cleared" \
+    "$(tm show-option -wqv -t beta:0 @multiplexer_sidebar_return_pane)" ""
 check "the key leaves no tmux command error" \
     "$(tm show-messages | grep -Ec 'returned [1-9][0-9]*')" 0
 check "the sidebar in alpha stays open" \
@@ -538,9 +546,32 @@ check "the sidebar in spare stays open" \
 tm set-environment -t beta PATH "$PATH"
 t send-keys -t e2e:tin C-b b
 eventually "the key opens the sidebar again" 3 sh -c "tmux list-panes -t beta: | wc -l | tr -d ' '"
-tm select-pane -t "$source_pane"
+sidebar_pane=$(tm list-panes -t beta:0 -F '#{pane_id} #{@multiplexer_sidebar}' | awk '$2 == 1 { print $1 }')
+wait_for e2e:tin "─ Sessions ─" >/dev/null
+tm send-keys -t "$sidebar_pane" q
+eventually "q closes the plugin sidebar" 2 sh -c "tmux list-panes -t beta: | wc -l | tr -d ' '"
+check "q restores pane widths" \
+    "$(tm list-panes -t beta:0 -F '#{pane_id}:#{pane_width}' | sort)" "$original_widths"
+check "q returns focus to the original pane" \
+    "$(tm display-message -t beta:0 -p '#{pane_id}')" "$source_pane"
+check "q clears the saved layout" \
+    "$(tm show-option -wqv -t beta:0 @multiplexer_sidebar_layout)" ""
+check "q clears the return pane" \
+    "$(tm show-option -wqv -t beta:0 @multiplexer_sidebar_return_pane)" ""
+t send-keys -t e2e:tin C-b b
+eventually "the key reopens after q" 3 sh -c "tmux list-panes -t beta: | wc -l | tr -d ' '"
+tm select-pane -t "$extra_pane"
 t send-keys -t e2e:tin C-b b
 eventually "the key closes the sidebar from another pane" 2 sh -c "tmux list-panes -t beta: | wc -l | tr -d ' '"
+check "closing from another pane restores widths" \
+    "$(tm list-panes -t beta:0 -F '#{pane_id}:#{pane_width}' | sort)" "$original_widths"
+check "closing from another pane keeps focus" \
+    "$(tm display-message -t beta:0 -p '#{pane_id}')" "$extra_pane"
+old_sidebar=$(tm split-window -hbf -l 32 -d -t "$source_pane" -P -F '#{pane_id}' "$dash --sidebar")
+tm set-option -p -t "$old_sidebar" @multiplexer_sidebar 1
+t send-keys -t e2e:tin C-b b
+eventually "the key closes an older sidebar without a saved layout" 2 \
+    sh -c "tmux list-panes -t beta: | wc -l | tr -d ' '"
 tm set -g @multiplexer-sidebar-compact-key c
 "$root/multiplexer-sidebar.tmux"
 t send-keys -t e2e:tin C-b c

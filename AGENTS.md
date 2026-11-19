@@ -98,4 +98,7 @@ and the outcome to preserve, not a step-by-step patch.
 - **A tmux sidebar key applies to one window.** A pane option identifies the
   sidebar until that pane closes, including when focus moves elsewhere or
   other sessions have their own sidebars. Keep the toggle in tmux commands
-  because an external `run-shell` command can exit 127 on macOS.
+  because an external `run-shell` command can exit 127 on macOS. Save the
+  window layout before opening a plugin sidebar and restore it after the
+  sidebar closes. The `q` path needs to restore terminal state before it
+  asks tmux to close its pane and restore that layout.

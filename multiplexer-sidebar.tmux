@@ -17,6 +17,8 @@ script="'$dir/multiplexer-dashboard'"
 # The pane loop adds spaces for other panes in the window. Remove them so
 # its result is either one sidebar pane ID or an empty string.
 sidebar_pane='#{s/ //g:#{P:#{?#{@multiplexer_sidebar},#{pane_id},}}}'
+# Window options keep the layout and return pane available when q exits.
+close_sidebar="kill-pane -t '$sidebar_pane' ; if-shell -F '#{@multiplexer_sidebar_layout}' { select-layout -t '#{window_id}' '#{@multiplexer_sidebar_layout}' } ; if-shell -F '#{@multiplexer_sidebar_return_pane}' { select-pane -t '#{?#{@multiplexer_sidebar},#{@multiplexer_sidebar_return_pane},#{pane_id}}' } ; set-option -wu -t '#{window_id}' @multiplexer_sidebar_layout ; set-option -wu -t '#{window_id}' @multiplexer_sidebar_return_pane"
 
 # Prints the value of a tmux option, or $2 when the option is not set.
 option() {
@@ -52,11 +54,11 @@ fi
 # run-shell -C expands the pane ID and runs tmux commands in the server.
 if [ -n "$sidebar_key" ]; then
     tmux bind-key "$sidebar_key" if-shell -F "$sidebar_pane" \
-        "run-shell -C \"kill-pane -t '$sidebar_pane'\"" \
-        "run-shell -C \"split-window -hbf -l 32 \\\"$script --sidebar\\\" ; set-option -p @multiplexer_sidebar 1\""
+        "run-shell -C \"$close_sidebar\"" \
+        "run-shell -C \"set-option -w @multiplexer_sidebar_layout '#{window_layout}' ; set-option -w @multiplexer_sidebar_return_pane '#{pane_id}' ; split-window -hbf -l 32 \\\"$script --sidebar\\\" ; set-option -p @multiplexer_sidebar 1\""
 fi
 if [ -n "$compact_key" ]; then
     tmux bind-key "$compact_key" if-shell -F "$sidebar_pane" \
-        "run-shell -C \"kill-pane -t '$sidebar_pane'\"" \
-        "run-shell -C \"split-window -hbf -l 3 \\\"$script --compact\\\" ; set-option -p @multiplexer_sidebar 1\""
+        "run-shell -C \"$close_sidebar\"" \
+        "run-shell -C \"set-option -w @multiplexer_sidebar_layout '#{window_layout}' ; set-option -w @multiplexer_sidebar_return_pane '#{pane_id}' ; split-window -hbf -l 3 \\\"$script --compact\\\" ; set-option -p @multiplexer_sidebar 1\""
 fi

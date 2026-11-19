@@ -708,6 +708,39 @@ def run_command(args: Sequence[str], timeout: float = 5.0) -> Result:
     )
 
 
+def close_tmux_sidebar(pane: str) -> None:
+    """Close a plugin sidebar and restore its window's saved layout."""
+    if not re.fullmatch(r"%[0-9]+", pane):
+        return
+    marker = run_command(
+        ["tmux", "show-option", "-pqv", "-t", pane, "@multiplexer_sidebar"]
+    )
+    if marker.code or marker.out.strip() != "1":
+        return
+    layout = run_command(
+        ["tmux", "show-option", "-wqv", "-t", pane, "@multiplexer_sidebar_layout"]
+    )
+    if layout.code or not layout.out.strip():
+        return
+    run_command(
+        [
+            "tmux",
+            "run-shell",
+            "-C",
+            "-t",
+            pane,
+            (
+                f"kill-pane -t '{pane}' ; "
+                "select-layout -t '#{window_id}' '#{@multiplexer_sidebar_layout}' ; "
+                "if-shell -F '#{@multiplexer_sidebar_return_pane}' "
+                "{ select-pane -t '#{@multiplexer_sidebar_return_pane}' } ; "
+                "set-option -wu -t '#{window_id}' @multiplexer_sidebar_layout ; "
+                "set-option -wu -t '#{window_id}' @multiplexer_sidebar_return_pane"
+            ),
+        ]
+    )
+
+
 def herdr_error(text: str) -> tuple[str, str] | None:
     """The code and message of a herdr error, which herdr prints as JSON."""
     try:
@@ -2069,11 +2102,11 @@ def jump_group(items: Sequence[Row], cursor: int, direction: int) -> int:
 
 @dataclass
 class Exit:
-    """How the dashboard ends: its exit status, and outside a multiplexer
-    the plan whose client replaces it."""
+    """Exit status, optional attach plan, and whether to close a sidebar."""
 
     code: int = 0
     plan: Plan | None = None
+    close_sidebar: bool = False
 
 
 @dataclass
@@ -2688,7 +2721,7 @@ class App:
             self.redraw_all = True
             self.refresh()
         elif k == "q":
-            self.result = Exit(0)
+            self.result = Exit(0, close_sidebar=self.options.sidebar)
         elif k == "esc":
             if self.filter:
                 self.filter = ""
@@ -3584,6 +3617,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     except KeyboardInterrupt:
         return 130
     result = app.result or Exit(0)
+    if result.close_sidebar and "tmux" in ctx.inside:
+        close_tmux_sidebar(os.environ.get("TMUX_PANE", ""))
     plan = result.plan
     if plan and plan.attach:
         try:

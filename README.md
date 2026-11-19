@@ -267,7 +267,9 @@ set -g focus-events on
 bind b split-window -hbf -l 32 multiplexer-sidebar --sidebar
 ```
 
-The tpm plugin above also lets `prefix+b` close an open sidebar.
+The tpm plugin above also lets `prefix+b` close an open sidebar. It tries to
+restore the window's pane widths when you close the sidebar with `prefix+b`
+or `q`.
 
 zellij (`~/.config/zellij/layouts/default.kdl`), to give every tab a
 sidebar, including the tabs and sessions you open later:
